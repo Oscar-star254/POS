@@ -13,7 +13,7 @@ import {
 } from '../lib/utils';
 import {
   generateHourlySales, generateWeeklySales, generateMonthlySales,
-  topProducts, paymentMethodData, categoryRevenue
+  paymentMethodData, categoryRevenue
 } from '../data/seed';
 
 const hourlySales = generateHourlySales();
@@ -80,6 +80,20 @@ export default function DashboardPage() {
   const outOfStock = products.filter(p => p.currentStock <= 0);
   const unreadAlerts = notifications.filter(n => !n.read);
   const totalCreditOutstanding = customers.reduce((s, c) => s + c.creditBalance, 0);
+  const topProducts = Object.values(sales.filter(sale => sale.status === 'COMPLETED').reduce<Record<string, {
+    name: string;
+    units: number;
+    sales: number;
+    trend: number;
+  }>>((totals, sale) => {
+    sale.items.forEach(item => {
+      const current = totals[item.productId] ?? { name: item.productName, units: 0, sales: 0, trend: 0 };
+      current.units += item.quantity;
+      current.sales += item.subtotal;
+      totals[item.productId] = current;
+    });
+    return totals;
+  }, {})).sort((a, b) => b.sales - a.sales);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartData: any[] = range === 'today' ? hourlySales : range === 'week' ? weeklySales : monthlySales;
@@ -219,12 +233,17 @@ export default function DashboardPage() {
                 </div>
                 <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
                   <div className="h-full rounded-full" style={{
-                    width: `${(p.sales / topProducts[0].sales * 100).toFixed(0)}%`,
+                    width: `${(p.sales / (topProducts[0]?.sales || 1) * 100).toFixed(0)}%`,
                     background: '#2F7F79',
                   }} />
                 </div>
               </div>
             ))}
+            {topProducts.length === 0 && (
+              <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                Product performance will appear after your first sale.
+              </div>
+            )}
           </div>
         </div>
 

@@ -5,11 +5,11 @@ import type {
   AuditAction, UserRole, SaleItem, PaymentSplit
 } from '../types';
 import {
-  seedProducts, seedUsers, seedCustomers, seedShifts, seedExpenses,
-  seedAuditLogs, seedNotifications, seedStockMovements, seedCategories,
+  seedCustomers, seedExpenses, seedCategories,
   seedSuppliers, branches as seedBranches, defaultSettings
 } from '../data/seed';
 import { generateReceiptNumber, canManageStock, PERMISSION_DENIED } from '../lib/utils';
+import { loadOfflineState, saveOfflineState } from '../lib/offlineStorage';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 interface AppState {
@@ -40,9 +40,11 @@ interface AppState {
   onlineStatus: 'online' | 'offline' | 'syncing';
   currentPage: string;
   sidebarOpen: boolean;
+  hydrated: boolean;
 }
 
 type Action =
+  | { type: 'HYDRATE'; state: Partial<AppState> | null }
   | { type: 'LOGIN'; user: User; method: 'password' | 'pin' }
   | { type: 'LOGOUT' }
   | { type: 'SET_PAGE'; page: string }
@@ -75,31 +77,39 @@ const initialState: AppState = {
   currentUser: null,
   isAuthenticated: false,
   loginMethod: null,
-  users: seedUsers,
-  products: seedProducts,
+  users: [],
+  products: [],
   categories: seedCategories,
   suppliers: seedSuppliers,
   customers: seedCustomers,
   sales: [],
-  shifts: seedShifts,
+  shifts: [],
   expenses: seedExpenses,
-  auditLogs: seedAuditLogs,
-  notifications: seedNotifications,
-  stockMovements: seedStockMovements,
+  auditLogs: [],
+  notifications: [],
+  stockMovements: [],
   grns: [],
   branches: seedBranches,
   settings: defaultSettings,
   darkMode: false,
   language: 'en',
   activeBranch: 'b1',
-  activeShiftId: 'sh2',
+  activeShiftId: null,
   onlineStatus: 'online',
   currentPage: 'dashboard',
   sidebarOpen: true,
+  hydrated: false,
 };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'HYDRATE':
+      return {
+        ...state,
+        ...(action.state ?? {}),
+        onlineStatus: navigator.onLine ? 'online' : 'offline',
+        hydrated: true,
+      };
     case 'LOGIN':
       return { ...state, currentUser: action.user, isAuthenticated: true, loginMethod: action.method };
     case 'LOGOUT':
@@ -228,6 +238,8 @@ interface AppContextType {
   writeOffStock: (productId: string, qty: number, reason: string) => boolean;
   createUser: (user: Omit<User, 'id' | 'active'>) => { success: boolean; error?: string };
   deleteUser: (userId: string) => { success: boolean; error?: string };
+  registerAdmin: (user: Pick<User, 'name' | 'email' | 'password' | 'pin'>) => { success: boolean; error?: string };
+  createProduct: (product: Omit<Product, 'id' | 'active' | 'createdAt' | 'updatedAt'>) => { success: boolean; error?: string };
   unreadCount: number;
 }
 
@@ -236,6 +248,19 @@ const AppContext = createContext<AppContextType | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  useEffect(() => {
+    loadOfflineState<Partial<AppState>>()
+      .then(savedState => dispatch({ type: 'HYDRATE', state: savedState }))
+      .catch(() => dispatch({ type: 'HYDRATE', state: null }));
+  }, []);
+
+  useEffect(() => {
+    if (!state.hydrated) return;
+    saveOfflineState(state).catch(() => {
+      // Mutations remain in memory when storage is unavailable.
+    });
+  }, [state]);
 
   // Dark mode sync
   useEffect(() => {
@@ -260,9 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Email + password login
       const user = state.users.find(u => u.email === emailOrPin && u.active);
       if (!user) return false;
-      // Seeded demo accounts accept any password; newly created users use their assigned password.
-      if (user.password && password !== user.password) return false;
-      if (emailOrPin === 'admin@zawadisupermarket.co.ke' && password !== 'admin123') return false;
+      if (!user.password || password !== user.password) return false;
       dispatch({ type: 'LOGIN', user, method: 'password' });
       dispatch({ type: 'ADD_AUDIT', log: {
         id: `al-${Date.now()}`, action: 'LOGIN', entityType: 'USER', entityId: user.id,
@@ -461,6 +484,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   }, [state.currentUser, state.users, addAudit]);
 
+  const registerAdmin = useCallback((details: Pick<User, 'name' | 'email' | 'password' | 'pin'>): { success: boolean; error?: string } => {
+    if (state.users.length > 0) {
+      return { success: false, error: 'An administrator account is already registered.' };
+    }
+    const email = details.email.trim().toLowerCase();
+    if (!details.name.trim() || !email || !details.password || !details.pin) {
+      return { success: false, error: 'All fields are required.' };
+    }
+    const admin: User = {
+      id: `u-${Date.now()}-admin`,
+      name: details.name.trim(),
+      email,
+      password: details.password,
+      pin: details.pin,
+      role: 'ADMIN',
+      branch: 'b1',
+      active: true,
+      twoFactorEnabled: false,
+    };
+    dispatch({ type: 'ADD_USER', user: admin });
+    dispatch({ type: 'LOGIN', user: admin, method: 'password' });
+    dispatch({ type: 'ADD_AUDIT', log: {
+      id: `al-${Date.now()}-admin`,
+      action: 'USER_CREATED',
+      entityType: 'USER',
+      entityId: admin.id,
+      description: `${admin.name} registered the administrator account`,
+      performedBy: admin.name,
+      performedByRole: 'ADMIN',
+      branch: admin.branch,
+      createdAt: new Date().toISOString(),
+    }});
+    return { success: true };
+  }, [state.users.length]);
+
+  const createProduct = useCallback((
+    details: Omit<Product, 'id' | 'active' | 'createdAt' | 'updatedAt'>
+  ): { success: boolean; error?: string } => {
+    if (state.currentUser?.role !== 'ADMIN') {
+      return { success: false, error: 'Only an administrator can create products.' };
+    }
+    const sku = details.sku.trim().toUpperCase();
+    if (!details.name.trim() || !sku) {
+      return { success: false, error: 'Product name and SKU are required.' };
+    }
+    if (state.products.some(product => product.sku.toUpperCase() === sku)) {
+      return { success: false, error: 'A product with this SKU already exists.' };
+    }
+    if (details.barcode && state.products.some(product => product.barcode === details.barcode)) {
+      return { success: false, error: 'A product with this barcode already exists.' };
+    }
+    const now = new Date().toISOString();
+    const product: Product = {
+      ...details,
+      id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: details.name.trim(),
+      sku,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    dispatch({ type: 'ADD_PRODUCT', product });
+    if (product.currentStock > 0) {
+      dispatch({ type: 'ADD_STOCK_MOVEMENT', movement: {
+        id: `sm-${Date.now()}-${product.id}`,
+        productId: product.id,
+        productName: product.name,
+        type: 'OPENING',
+        quantity: product.currentStock,
+        unitCost: product.buyingPrice,
+        balanceBefore: 0,
+        balanceAfter: product.currentStock,
+        reason: 'Opening stock entered during product registration',
+        performedBy: state.currentUser.name,
+        performedByRole: state.currentUser.role,
+        branch: state.activeBranch,
+        createdAt: now,
+      }});
+    }
+    addAudit('PRODUCT_CREATED', 'PRODUCT', `${product.name} added to inventory`, {
+      entityId: product.id,
+      newValue: { name: product.name, sku: product.sku, openingStock: product.currentStock },
+    });
+    return { success: true };
+  }, [state.currentUser, state.products, state.activeBranch, addAudit]);
+
   const deleteUser = useCallback((userId: string): { success: boolean; error?: string } => {
     if (state.currentUser?.role !== 'ADMIN') {
       return { success: false, error: 'Only an administrator can delete users.' };
@@ -486,7 +595,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       state, dispatch,
       login, logout, navigate, addAudit,
       completeSale, receiveStock, adjustStock, writeOffStock,
-      createUser, deleteUser,
+      createUser, deleteUser, registerAdmin, createProduct,
       unreadCount,
     }}>
       {children}

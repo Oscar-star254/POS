@@ -6,7 +6,7 @@ import {
 import { FileBarChart2, Download, Calendar, TrendingUp, DollarSign, Package, Users } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { formatKES, formatNumber, formatDate } from '../lib/utils';
-import { generateWeeklySales, generateMonthlySales, topProducts, paymentMethodData } from '../data/seed';
+import { generateWeeklySales, generateMonthlySales, paymentMethodData } from '../data/seed';
 
 type ReportTab = 'sales' | 'inventory' | 'vat' | 'cashier' | 'pnl';
 
@@ -15,7 +15,7 @@ const monthlySales = generateMonthlySales();
 
 export default function ReportsPage() {
   const { state } = useApp();
-  const { products, expenses, customers, language } = state;
+  const { products, expenses, customers, language, sales } = state;
   const [tab, setTab] = useState<ReportTab>('sales');
   const [dateRange, setDateRange] = useState('month');
 
@@ -27,6 +27,19 @@ export default function ReportsPage() {
   const netProfit = totalProfit - totalExpenses;
   const totalVAT = totalRevenue * 0.16 / 1.16;
   const stockValue = products.reduce((s, p) => s + p.currentStock * p.buyingPrice, 0);
+  const topProducts = Object.values(sales.filter(sale => sale.status === 'COMPLETED').reduce<Record<string, {
+    name: string;
+    units: number;
+    sales: number;
+  }>>((totals, sale) => {
+    sale.items.forEach(item => {
+      const current = totals[item.productId] ?? { name: item.productName, units: 0, sales: 0 };
+      current.units += item.quantity;
+      current.sales += item.subtotal;
+      totals[item.productId] = current;
+    });
+    return totals;
+  }, {})).sort((a, b) => b.sales - a.sales);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -127,7 +140,7 @@ export default function ReportsPage() {
                     </div>
                     <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
                       <div className="h-full rounded-full" style={{
-                        width: `${(p.sales / topProducts[0].sales * 100).toFixed(0)}%`,
+                        width: `${(p.sales / (topProducts[0]?.sales || 1) * 100).toFixed(0)}%`,
                         background: i < 3 ? '#1F2A44' : '#2F7F79',
                       }} />
                     </div>
@@ -135,6 +148,11 @@ export default function ReportsPage() {
                   <span className="text-xs w-14 text-right" style={{ color: 'var(--text-muted)' }}>{formatNumber(p.units)} pcs</span>
                 </div>
               ))}
+              {topProducts.length === 0 && (
+                <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Product performance will appear after completed sales.
+                </div>
+              )}
             </div>
           </div>
 

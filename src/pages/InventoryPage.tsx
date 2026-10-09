@@ -21,6 +21,135 @@ function StockBadge({ current, reorder }: { current: number; reorder: number }) 
   );
 }
 
+function ProductModal({ onClose }: { onClose: () => void }) {
+  const { state, createProduct } = useApp();
+  const [error, setError] = useState('');
+  const [product, setProduct] = useState({
+    name: '',
+    sku: '',
+    barcode: '',
+    category: state.categories[0]?.id || '',
+    brand: '',
+    unit: 'pcs' as Product['unit'],
+    buyingPrice: 0,
+    sellingPrice: 0,
+    vatClass: 'STANDARD' as Product['vatClass'],
+    supplierId: '',
+    reorderLevel: 5,
+    reorderQty: 10,
+    minStock: 0,
+    maxStock: 100,
+    currentStock: 0,
+    trackExpiry: false,
+  });
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (product.sellingPrice < 0 || product.buyingPrice < 0 || product.currentStock < 0) {
+      setError('Prices and opening stock cannot be negative.');
+      return;
+    }
+    const result = createProduct({
+      ...product,
+      barcode: product.barcode.trim() || undefined,
+      brand: product.brand.trim() || undefined,
+      supplierId: product.supplierId || undefined,
+    });
+    if (!result.success) {
+      setError(result.error || 'Unable to add product.');
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between px-6 py-5 border-b" style={{ borderColor: 'var(--border-color)' }}>
+          <div>
+            <h3 className="font-bold" style={{ color: 'var(--text-primary)' }}>Add product</h3>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>The item will be available in Inventory and Point of Sale immediately.</p>
+          </div>
+          <button className="btn-ghost p-2" onClick={onClose} aria-label="Close product form"><X size={16} /></button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Product name
+              <input className="input-base mt-1.5" value={product.name} onChange={event => setProduct(value => ({ ...value, name: event.target.value }))} required autoFocus />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              SKU
+              <input className="input-base mt-1.5 font-mono" value={product.sku} onChange={event => setProduct(value => ({ ...value, sku: event.target.value }))} placeholder="e.g. MILK-500" required />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Barcode (optional)
+              <input className="input-base mt-1.5 font-mono" value={product.barcode} onChange={event => setProduct(value => ({ ...value, barcode: event.target.value }))} />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Brand (optional)
+              <input className="input-base mt-1.5" value={product.brand} onChange={event => setProduct(value => ({ ...value, brand: event.target.value }))} />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Category
+              <select className="input-base mt-1.5" value={product.category} onChange={event => setProduct(value => ({ ...value, category: event.target.value }))} required>
+                {state.categories.filter(category => category.active).map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Unit
+              <select className="input-base mt-1.5" value={product.unit} onChange={event => setProduct(value => ({ ...value, unit: event.target.value as Product['unit'] }))}>
+                {['pcs', 'kg', 'litre', 'dozen', 'carton', 'pack', 'bundle'].map(unit => <option key={unit} value={unit}>{unit}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Buying price (KES)
+              <input type="number" min="0" step="0.01" className="input-base mt-1.5" value={product.buyingPrice} onChange={event => setProduct(value => ({ ...value, buyingPrice: Number(event.target.value) }))} required />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Selling price (KES)
+              <input type="number" min="0" step="0.01" className="input-base mt-1.5" value={product.sellingPrice} onChange={event => setProduct(value => ({ ...value, sellingPrice: Number(event.target.value) }))} required />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Opening stock
+              <input type="number" min="0" className="input-base mt-1.5" value={product.currentStock} onChange={event => setProduct(value => ({ ...value, currentStock: Number(event.target.value) }))} />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Reorder level
+              <input type="number" min="0" className="input-base mt-1.5" value={product.reorderLevel} onChange={event => setProduct(value => ({ ...value, reorderLevel: Number(event.target.value) }))} />
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              VAT class
+              <select className="input-base mt-1.5" value={product.vatClass} onChange={event => setProduct(value => ({ ...value, vatClass: event.target.value as Product['vatClass'] }))}>
+                <option value="STANDARD">Standard (16%)</option>
+                <option value="ZERO_RATED">Zero rated</option>
+                <option value="EXEMPT">Exempt</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Supplier (optional)
+              <select className="input-base mt-1.5" value={product.supplierId} onChange={event => setProduct(value => ({ ...value, supplierId: event.target.value }))}>
+                <option value="">No supplier</option>
+                {state.suppliers.filter(supplier => supplier.active).map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs badge-terracotta">
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-teal"><Plus size={15} /> Add product</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function GRNModal({ onClose }: { onClose: () => void }) {
   const { state, dispatch, addAudit } = useApp();
   const { products, suppliers, currentUser } = state;
@@ -277,6 +406,7 @@ export default function InventoryPage() {
   const [filterCat, setFilterCat] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showGRN, setShowGRN] = useState(false);
+  const [showProductForm, setShowProductForm] = useState(false);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
   const isAdmin = currentUser?.role === 'ADMIN';
 
@@ -409,9 +539,14 @@ export default function InventoryPage() {
               <option value="ok">In stock</option>
             </select>
             {isAdmin && (
-              <button onClick={() => setShowGRN(true)} className="btn-teal text-sm">
-                <Plus size={15} /> Receive Stock
-              </button>
+              <>
+                <button onClick={() => setShowProductForm(true)} className="btn-primary text-sm">
+                  <Plus size={15} /> Add product
+                </button>
+                <button onClick={() => setShowGRN(true)} className="btn-teal text-sm" disabled={products.length === 0}>
+                  <Package size={15} /> Receive stock
+                </button>
+              </>
             )}
           </div>
 
@@ -457,6 +592,13 @@ export default function InventoryPage() {
                       </tr>
                     );
                   })}
+                  {filteredProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center" style={{ color: 'var(--text-muted)' }}>
+                        {products.length === 0 ? 'No products yet. Add your first product to begin.' : 'No products match these filters.'}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -558,6 +700,7 @@ export default function InventoryPage() {
 
       {/* Modals */}
       {showGRN && <GRNModal onClose={() => setShowGRN(false)} />}
+      {showProductForm && <ProductModal onClose={() => setShowProductForm(false)} />}
       {adjustProduct && <AdjustModal product={adjustProduct} onClose={() => setAdjustProduct(null)} />}
     </div>
   );

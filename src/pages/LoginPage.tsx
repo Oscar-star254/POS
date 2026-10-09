@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
-import { Wheat, Eye, EyeOff, Loader2, AlertCircle, Delete } from 'lucide-react';
+import { Wheat, Eye, EyeOff, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useApp } from '../store/AppContext';
-import { seedUsers } from '../data/seed';
+import InstallButton from '../components/InstallButton';
 
 type LoginTab = 'email' | 'pin';
 
 export default function LoginPage() {
-  const { login, state } = useApp();
+  const { login, registerAdmin, state } = useApp();
   const [tab, setTab] = useState<LoginTab>('email');
-  const [email, setEmail] = useState('admin@zawadisupermarket.co.ke');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [admin, setAdmin] = useState({ name: '', email: '', password: '', pin: '' });
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,11 +42,74 @@ export default function LoginPage() {
     }
   };
 
-  const demoUsers = [
-    { label: 'Admin', email: 'admin@zawadisupermarket.co.ke', pw: 'admin123', pin: '0000' },
-    { label: 'Manager', email: 'manager@zawadisupermarket.co.ke', pw: 'demo123', pin: '1234' },
-    { label: 'Cashier', email: 'cashier@zawadisupermarket.co.ke', pw: 'demo123', pin: '5678' },
-  ];
+  const handleAdminRegistration = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (!/^\d{4}$/.test(admin.pin)) {
+      setError('Choose a secure 4-digit PIN.');
+      return;
+    }
+    if (admin.password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    const result = registerAdmin(admin);
+    if (!result.success) setError(result.error || 'Unable to register the administrator.');
+  };
+
+  if (!state.hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: '#2F7F79' }} />
+      </div>
+    );
+  }
+
+  if (state.users.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg)' }}>
+        <div className="card w-full max-w-md p-7">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style={{ background: 'rgba(47,127,121,0.14)', color: '#2F7F79' }}>
+            <ShieldCheck size={24} />
+          </div>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Register your administrator</h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+            This is a clean installation. Create the owner account that will manage products and staff access.
+          </p>
+          <form onSubmit={handleAdminRegistration} className="space-y-4">
+            <label className="block text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Full name
+              <input className="input-base mt-1.5" value={admin.name} onChange={event => setAdmin(value => ({ ...value, name: event.target.value }))} required autoFocus />
+            </label>
+            <label className="block text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Email address
+              <input type="email" className="input-base mt-1.5" value={admin.email} onChange={event => setAdmin(value => ({ ...value, email: event.target.value }))} placeholder="owner@business.co.ke" required />
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                Password
+                <input type="password" className="input-base mt-1.5" value={admin.password} onChange={event => setAdmin(value => ({ ...value, password: event.target.value }))} placeholder="8+ characters" required />
+              </label>
+              <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                4-digit PIN
+                <input inputMode="numeric" maxLength={4} className="input-base mt-1.5 font-mono" value={admin.pin} onChange={event => setAdmin(value => ({ ...value, pin: event.target.value.replace(/\D/g, '') }))} placeholder="••••" required />
+              </label>
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg badge-terracotta">
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
+            <button type="submit" className="btn-primary w-full justify-center py-2.5">Create administrator account</button>
+            <InstallButton />
+          </form>
+          <p className="text-xs text-center mt-5" style={{ color: 'var(--text-muted)' }}>
+            Your account, products, and sales are saved automatically on this device for offline use.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
@@ -209,25 +273,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Demo access */}
-          <div className="mt-6 p-4 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-              🎮 Demo Access
-            </div>
-            <div className="space-y-1">
-              {demoUsers.map(u => (
-                <button key={u.label}
-                  onClick={() => {
-                    if (tab === 'pin') { setPin(''); login(u.pin); }
-                    else { setEmail(u.email); setPassword(u.pw); }
-                  }}
-                  className="flex items-center justify-between w-full text-xs px-2 py-1.5 rounded-lg transition-all hover:opacity-80"
-                  style={{ color: 'var(--text-secondary)' }}>
-                  <span className="font-medium">{u.label}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>PIN: {u.pin} | {u.email.split('@')[0]}</span>
-                </button>
-              ))}
-            </div>
+          <div className="mt-6">
+            <InstallButton />
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { timeAgo, clsx } from '../../lib/utils';
+import InstallButton from '../InstallButton';
 
 const pageLabels: Record<string, { en: string; sw: string }> = {
   dashboard: { en: 'Dashboard', sw: 'Dashibodi' },
@@ -56,6 +57,8 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <InstallButton compact />
+
         {/* Online status */}
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
           style={{ background: 'var(--bg-surface)', color: onlineColor }}>

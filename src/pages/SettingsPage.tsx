@@ -58,7 +58,7 @@ export default function SettingsPage() {
     setUserError('');
     setUserSuccess('');
     if (!newUser.name.trim() || !newUser.email.trim() || !newUser.pin || !newUser.password) {
-      setUserError('Name, email, PIN, and temporary password are required.');
+      setUserError('Name, email, PIN, and password are required.');
       return;
     }
     if (!/^\d{4}$/.test(newUser.pin)) {
@@ -66,7 +66,7 @@ export default function SettingsPage() {
       return;
     }
     if (newUser.password.length < 8) {
-      setUserError('Temporary password must be at least 8 characters.');
+      setUserError('Password must be at least 8 characters.');
       return;
     }
 
@@ -397,7 +397,9 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{u.name}</div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{u.email} · PIN: {u.pin}</div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {u.email} · {branches.find(branch => branch.id === u.branch)?.name || u.branch}
+                      </div>
                     </div>
                     <span className={`badge ${u.role === 'ADMIN' ? 'badge-navy' : u.role === 'MANAGER' ? 'badge-teal' : u.role === 'CASHIER' ? 'badge-slate' : 'badge-amber'}`}>
                       {u.role}
@@ -468,7 +470,7 @@ export default function SettingsPage() {
                           <input inputMode="numeric" maxLength={4} className="input-base mt-1.5 font-mono" value={newUser.pin} onChange={event => setNewUser(user => ({ ...user, pin: event.target.value.replace(/\D/g, '') }))} placeholder="••••" />
                         </label>
                         <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                          Temporary password
+                          Password
                           <input type="password" className="input-base mt-1.5" value={newUser.password} onChange={event => setNewUser(user => ({ ...user, password: event.target.value }))} placeholder="At least 8 characters" />
                         </label>
                       </div>
