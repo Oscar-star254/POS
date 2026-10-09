@@ -1,0 +1,10 @@
+{
+  "description": "Comprehensive POS and inventory system tailored for Kenyan retailers offering secure stock control, seamless M-Pesa payments, VAT compliance, and offline capability.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
